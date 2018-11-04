@@ -166,8 +166,22 @@ int parser(TokenList tokenList, FILE* out)
 int program()
 {
     printNonTerminal(PROGRAM);
-
-    /* TODO: Implement */
+	
+	// Error variable to track errors.
+	int err = 0;
+	
+	// Pass to block and check error code returned.
+	err = block();
+	if(err != 0)
+		return err;
+	
+	// Check if the last symbol is a period, otherwise return
+	// error 6 for "period expected".
+	if(getCurrentTokenType() != periodsym)
+		return 6;
+	
+	// Print period.
+	printCurrentToken();
 
     return 0;
 }
@@ -175,17 +189,89 @@ int program()
 int block()
 {
     printNonTerminal(BLOCK);
-
-    /* TODO: Implement */
-
-    return 0;
+	
+	// Error variable to track errors.
+	int err = 0;
+	
+	// Check if current token is a constant and pass to constant
+	// declaration.
+	printNonTerminal(CONST_DECLARATION);
+    if(getCurrentTokenType() == constsym && err == 0)
+		err = const_declaration();
+	// Error check
+	if(err != 0)
+		return err;
+	
+	// Check if current token is a variable and pass to variable
+	// declaration.
+	printNonTerminal(VAR_DECLARATION);
+    if(getCurrentTokenType() == varsym && err == 0)
+		err = var_declaration();
+	// Error check
+	if(err != 0)
+		return err;
+	
+	// Check if current token is a procedure and pass to 
+	// procedure declaration.
+	printNonTerminal(PROC_DECLARATION);
+	if(getCurrentTokenType() == procsym && err == 0)
+		err = proc_declaration();
+	// Error check
+	if(err != 0)
+		return err;
+	
+	err = statement();
+	
+    return err;
 }
 
 int const_declaration()
 {
-    printNonTerminal(CONST_DECLARATION);
-
-    /* TODO: Implement */
+	// Do while loop parses constant declaration. Goes until a 
+	// comma isn't found.
+    do
+	{
+		// Declare a new Symbol and set its type and level 
+		// values.
+		Symbol newSym;
+		newSym.type = CONST;
+		newSym.level = currentLevel;
+		
+		// Get next token and check that it is an identifier.
+		printCurrentToken();
+		nextToken();
+		if(getCurrentTokenType() != identsym)
+			return 3;
+		// Update the symbol's name.
+		strcpy(newSym.name, getCurrentToken().lexeme);
+		
+		// Get next token and check that it is an equal sign.
+		printCurrentToken();
+		nextToken();
+		if(getCurrentTokenType() != eqsym)
+			return 2;
+		
+		// Get the next token and check that it is a number.
+		printCurrentToken();
+		nextToken();
+		if(getCurrentTokenType() != numbersym)
+			return 1;
+		// Update the symbol's value.
+		newSym.value = atoi(getCurrentToken().lexeme);
+		
+		// Add the new symbol to the table.
+		addSymbol(&symbolTable, newSym);
+		
+		// Get next token.
+		printCurrentToken();
+		nextToken();
+	} while(getCurrentTokenType() == commasym);
+	
+	// Check for semicolon and get the next token.
+	if(getCurrentTokenType() != semicolonsym)
+		return 5;
+	printCurrentToken();
+	nextToken();
 
     // Successful parsing.
     return 0;
@@ -193,46 +279,271 @@ int const_declaration()
 
 int var_declaration()
 {
-    printNonTerminal(VAR_DECLARATION);
-
-    /* TODO: Implement */
+    do
+	{
+		// Declare a new symbol and set its type and level
+		// values.
+		Symbol newSym;
+		newSym.type = VAR;
+		newSym.level = currentLevel;
+		
+		// Get next token and check that it is an identifier.
+		printCurrentToken();
+		nextToken();
+		if(getCurrentTokenType() != identsym)
+			return 3;
+		// Update the symbol's name.
+		strcpy(newSym.name, getCurrentToken().lexeme);
+		
+		// Get the next token.
+		printCurrentToken();
+		nextToken();
+		
+		// Add the new symbol to the table.
+		addSymbol(&symbolTable, newSym);
+	} while(getCurrentTokenType() == commasym);
+	
+	// Check for semicolon and get the next token.
+	if(getCurrentTokenType() != semicolonsym)
+		return 4;
+	printCurrentToken();
+	nextToken();
 
     return 0;
 }
 
 int proc_declaration()
 {
-    printNonTerminal(PROC_DECLARATION);
+	// Error variable for tracking error codes.
+	int err = 0;
+	
+	// While loop parses procedure declaration.
+    while(getCurrentTokenType() == procsym)
+	{
+		// Declare a new symbol and set its type and level
+		// values.
+		Symbol newSym;
+		newSym.type = PROC;
+		newSym.level = currentLevel;
+		
+		// Get next token and check that it is an identifier.
+		printCurrentToken();
+		nextToken();
+		if(getCurrentTokenType() != identsym)
+			return 3;
+		// Update the symbol's name.
+		strcpy(newSym.name, getCurrentToken().lexeme);
+		
+		// Add the new symbol to the table.
+		addSymbol(&symbolTable, newSym);
+		
+		// Get next token and check that it is a semicolon.
+		printCurrentToken();
+		nextToken();
+		if(getCurrentTokenType() != semicolonsym)
+			return 5;
+		
+		// Get next token.
+		printCurrentToken();
+		nextToken();
+		
+		// Increment the current level for the next block and
+		// decrement it after the block is finished.
+		currentLevel++;
+		err = block();
+		currentLevel--;
+		
+		// If error is found return immediately.
+		if(err != 0)
+			return err;
+		
+		// Check for semicolon after new block.
+		if(getCurrentTokenType() != semicolonsym)
+			return 5;
+		
+		// Get next token.
+		printCurrentToken();
+		nextToken();
+	}
 
-    /* TODO: Implement */
-
-    return 0;
+    return err;
 }
 
 int statement()
 {
     printNonTerminal(STATEMENT);
+	
+	// Error variable for tracking error codes.
+	int err = 0;
+	
+	// Statement that begins with an identifier symbol.
+    if(getCurrentTokenType() == identsym)
+	{
+		// Get next token and check if it is a become symbol.
+		printCurrentToken();
+		nextToken();
+		if(getCurrentTokenType() != becomessym)
+			return 7;
+		
+		// Get next token and pass to expression.
+		printCurrentToken();
+		nextToken();
+		err = expression();
+	}
+	// Statement that begins with a call symbol.
+	else if(getCurrentTokenType() == callsym)
+	{
+		// Get next token and check if it is an identifier.
+		printCurrentToken();
+		nextToken();
+		if(getCurrentTokenType() != identsym)
+			return 8;
+		
+		// Get next token.
+		printCurrentToken();
+		nextToken();
+	}
+	// Statement that begins with begin symbol.
+	else if(getCurrentTokenType() == beginsym)
+	{
+		// Get next token and pass to statement.
+		printCurrentToken();
+		nextToken();
+		err = statement();
+		
+		while (getCurrentTokenType() == semicolonsym)
+		{
+			// Get next token and pass to statement.
+			printCurrentToken();
+			nextToken();
+			err = statement();
+		}
+		
+		// Check for end symbol and get the next token.
+		if(getCurrentTokenType() != endsym)
+			return 10;
+		printCurrentToken();
+		nextToken();
+	}
+	// Statement that begins with if symbol.
+	else if(getCurrentTokenType() == ifsym)
+	{
+		// Get next token and pass to condition.
+		printCurrentToken();
+		nextToken();
+		err = condition();
+		
+		// Check the token is a then symbol.
+		if(getCurrentTokenType() != thensym)
+			return 9;
+		
+		// Get next token and pass to statement.
+		printCurrentToken();
+		nextToken();
+		err = statement();
+		
+		// Check for else statement. Get the next token and pass
+		// to statement if an else token is the current token.
+		if(getCurrentTokenType() == elsesym)
+		{
+			printCurrentToken();
+			nextToken();
+			err = statement();
+		}
+	}
+	// Statement that begins with while symbol.
+	else if(getCurrentTokenType() == whilesym)
+	{
+		// Get next token and pass to condition.
+		printCurrentToken();
+		nextToken();
+		err = condition();
+		
+		// Check the token is a do symbol.
+		if(getCurrentTokenType() != dosym)
+			return 11;
+		
+		// Get next token and pass to statement.
+		printCurrentToken();
+		nextToken();
+		err = statement();
+	}
+	// Statement that begins with write symbol.
+	else if(getCurrentTokenType() == writesym)
+	{
+		// Get next token and check if its an identifier.
+		printCurrentToken();
+		nextToken();
+		if(getCurrentTokenType() != identsym)
+			return 3;
+		
+		// Get next token.
+		printCurrentToken();
+		nextToken();
+	}
+	// Statement that begins with read symbol.
+	else if(getCurrentTokenType() == readsym)
+	{
+		// Get next token and check if its an identifier.
+		printCurrentToken();
+		nextToken();
+		if(getCurrentTokenType() != identsym)
+			return 3;
+		
+		// Get next token.
+		printCurrentToken();
+		nextToken();
+	}
 
-    /* TODO: Implement */
-
-    return 0;
+    return err;
 }
 
 int condition()
 {
     printNonTerminal(CONDITION);
+	
+	// Error variable for tracking errors.
+	int err = 0;
+	
+	// Check if the condition begins with an odd symbol.
+    if(getCurrentTokenType() == oddsym)
+	{
+		// Get next token and pass to expression.
+		printCurrentToken();
+		nextToken();
+		err = expression();
+	}
+	else
+	{
+		err = expression();
+		
+		// Check if the current token is a relation symbol.
+		if(getCurrentTokenType() != relop())
+			return 12;
+		
+		// Get next token and pass to expression.
+		printCurrentToken();
+		nextToken();
+		err = expression();
+	}
 
-    /* TODO: Implement */
-
-    return 0;
+    return err;
 }
 
 int relop()
 {
     printNonTerminal(REL_OP);
 
-    /* TODO: Implement */
-
+	// Compare the current token with all of the relation ops.
+    if(getCurrentTokenType() == eqsym || 
+	   getCurrentTokenType() == neqsym ||
+	   getCurrentTokenType() == lessym ||
+	   getCurrentTokenType() == leqsym ||
+	   getCurrentTokenType() == gtrsym ||
+	   getCurrentTokenType() == geqsym)
+	   return getCurrentTokenType();
+	
+	// Failure to find relation operator.
     return 0;
 }
 
@@ -240,16 +551,48 @@ int expression()
 {
     printNonTerminal(EXPRESSION);
 
-    /* TODO: Implement */
+	// Error variable for tracking error codes.
+	int err = 0;
+	
+	// Get the next token if the current is a plus or minus sign.
+    if(getCurrentTokenType() == plussym || 
+	   getCurrentTokenType() == minussym)
+	{
+		printCurrentToken();
+		nextToken();
+	}
+	
+	err = term();
+	
+	// Continue parsing until the end of the expression.
+	while(getCurrentTokenType() == plussym || 
+	      getCurrentTokenType() == minussym)
+	{
+		printCurrentToken();
+		nextToken();
+		err = term();
+	}
 
-    return 0;
+    return err;
 }
 
 int term()
 {
     printNonTerminal(TERM);
 
-    /* TODO: Implement */
+	// Error variable for tracking errors.
+	int err = 0;
+	
+    err = factor();
+	
+	// Continue parsing until the end of the term expression.
+	while(getCurrentTokenType() == multsym || 
+	      getCurrentTokenType() == slashsym)
+	{
+		printCurrentToken();
+		nextToken();
+		err = factor();
+	}
 
     return 0;
 }
